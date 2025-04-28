@@ -1,5 +1,6 @@
 import asyncio
 import functools
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -262,5 +263,8 @@ if __name__ == "__main__":
     for _ref in research_result.references:
         result_md += f"- [{_ref.description}]({_ref.url})\n"
 
-    outfile = Path("./markdown_report.md")
+    outdir = os.environ["OUTPUT_DIR"]
+    if outdir == "":
+        outdir = "./"
+    outfile = Path(f"{outdir}markdown_report.md")
     outfile.write_text(result_md)
