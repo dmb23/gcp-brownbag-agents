@@ -3,6 +3,7 @@ import functools
 import os
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -266,5 +267,5 @@ if __name__ == "__main__":
     outdir = os.environ["OUTPUT_DIR"]
     if outdir == "":
         outdir = "./"
-    outfile = Path(f"{outdir}markdown_report.md")
+    outfile = Path(outdir) / f"markdown_report_{datetime.now()}.md"
     outfile.write_text(result_md)
