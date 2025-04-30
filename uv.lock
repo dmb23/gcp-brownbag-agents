@@ -280,7 +280,7 @@ wheels = [
 [[package]]
 name = "gcp-brownbag-agents"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "anyio" },
     { name = "duckduckgo-search" },

@@ -12,3 +12,4 @@ wheels/
 # files for local testing
 .env
 markdown_report.md
+.aider*
