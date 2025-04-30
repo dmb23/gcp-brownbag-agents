@@ -35,10 +35,16 @@ class BaseTool(ABC, Generic[T]):
     
     def get_tool(self) -> Tool:
         """Return a Tool instance for this tool."""
+        # Get class name and docstring for tool name and description
+        tool_name = self.__class__.__name__
+        tool_description = self.__class__.__doc__ or f"A {tool_name} instance"
+        
         return Tool(
             self.execute,
             takes_ctx=self.takes_ctx(),
-            prepare=self.prepare_func
+            prepare=self.prepare_func,
+            name=tool_name,
+            description=tool_description
         )
     
     @abstractmethod
