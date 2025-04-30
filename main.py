@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from pydantic_ai import Agent
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from gcp_brownbag_agents import prompts, types
+from gcp_brownbag_agents import agents, prompts, types
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=4))
@@ -32,7 +32,8 @@ if __name__ == "__main__":
 
     model_name = "anthropic:claude-3-5-sonnet-latest"
 
-    research_result = asyncio.run(let_grimaud_search(research_agent))
+    grimaud = agents.wake_up_grimaud(model_name)
+    research_result = asyncio.run(let_grimaud_search(grimaud))
 
     # create final Markdown document
     result_md = research_result.full_text + "\n\n"
@@ -42,8 +43,6 @@ if __name__ == "__main__":
     for _ref in research_result.references:
         result_md += f"- [{_ref.description}]({_ref.url})\n"
 
-    outdir = os.environ["OUTPUT_DIR"]
-    if outdir == "":
-        outdir = "./"
+    outdir = os.environ.get("OUTPUT_DIR", "./")
     outfile = Path(outdir) / f"markdown_report_{datetime.now()}.md"
     outfile.write_text(result_md)
