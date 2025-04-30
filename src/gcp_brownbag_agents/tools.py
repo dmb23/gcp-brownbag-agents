@@ -193,15 +193,4 @@ class WebpageTool(BaseTool[types.RunDeps]):
         return True
 
 
-# Factory functions to maintain backward compatibility
-def hacker_news_tool() -> Tool[types.RunDeps]:
-    return HackerNewsTool(prepare_func=select_hn).get_tool()
-
-
-def duckduckgo_search_tool(*args, **kwargs) -> Tool:
-    _prepare = kwargs.pop("prepare", select_search)
-    return DuckDuckGoSearchTool(*args, prepare_func=_prepare, **kwargs).get_tool()
-
-
-def visit_webpage_tool() -> Tool[types.RunDeps]:
-    return WebpageTool().get_tool()
+# Tool classes are now used directly
