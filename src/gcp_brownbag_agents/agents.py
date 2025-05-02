@@ -1,23 +1,26 @@
 from pydantic_ai import Agent, RunContext
+from pydantic_ai.models import Model
 
 from gcp_brownbag_agents import prompts, types
 from gcp_brownbag_agents.tools import (
-    HackerNewsTool, 
-    DuckDuckGoSearchTool, 
+    DuckDuckGoSearchTool,
+    HackerNewsTool,
     WebpageTool,
     select_hn,
-    select_search
+    select_search,
 )
 
 
-def wake_up_grimaud(model_name: str) -> Agent[types.RunDeps, types.ResearchResult]:
+def wake_up_grimaud(
+    model: Model | str,
+) -> Agent[types.RunDeps, types.ResearchResult]:
     # Create tool instances
     hn_tool = HackerNewsTool(prepare_func=select_hn)
     ddg_tool = DuckDuckGoSearchTool(prepare_func=select_search)
     webpage_tool = WebpageTool()
-    
+
     grimaud = Agent(
-        model_name,
+        model,
         tools=[
             webpage_tool.get_tool(),
             hn_tool.get_tool(),
@@ -27,6 +30,7 @@ def wake_up_grimaud(model_name: str) -> Agent[types.RunDeps, types.ResearchResul
         deps_type=types.RunDeps,
         retries=4,
         system_prompt=prompts.GRIMAUD_SYSTEM,
+        instrument=True,
     )
 
     @grimaud.system_prompt
