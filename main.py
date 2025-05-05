@@ -27,9 +27,11 @@ if __name__ == "__main__":
 
     # Create the Grimaud agent with our model and settings
     grimaud_agent = GrimaudAgent(
-        model=model, request_limit=10, output_dir=os.environ.get("OUTPUT_DIR", "./")
+        model=model, 
+        request_limit=30,  # Increased limit for the three-step process
+        output_dir=os.environ.get("OUTPUT_DIR", "./")
     )
 
-    # Run the complete research workflow
-    output_file = asyncio.run(grimaud_agent.research_and_save())
-    print(f"Research completed and saved to: {output_file}")
+    # Run the complete three-step workflow
+    output_file = asyncio.run(grimaud_agent.run_full_workflow())
+    print(f"Research workflow completed and saved to: {output_file}")
