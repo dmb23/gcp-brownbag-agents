@@ -4,10 +4,8 @@ import os
 import logfire
 from dotenv import load_dotenv
 from pydantic_ai.models.gemini import GeminiModel
-from pydantic_ai.providers.google_vertex import GoogleVertexProvider
 
 from gcp_brownbag_agents.agents import GrimaudAgent
-
 
 if __name__ == "__main__":
     load_dotenv()
@@ -20,19 +18,18 @@ if __name__ == "__main__":
 
     # Gemini 2.5 Flash - setup worked, but there were inconsistencies in the reports
     # model = GeminiModel("gemini-2.5-flash-preview-04-17", provider="google-vertex")
+    model = GeminiModel("gemini-2.5-pro-preview-03-25", provider="google-vertex")
 
     # Gemini 2.0 Flash - got lost in an eternal research spree...
-    model = GeminiModel(
-        "gemini-2.0-flash", provider=GoogleVertexProvider(region="europe-west9")
-    )
+    # model = GeminiModel(
+    #     "gemini-2.0-flash", provider=GoogleVertexProvider(region="europe-west9")
+    # )
 
     # Create the Grimaud agent with our model and settings
     grimaud_agent = GrimaudAgent(
-        model=model,
-        request_limit=10,
-        output_dir=os.environ.get("OUTPUT_DIR", "./")
+        model=model, request_limit=10, output_dir=os.environ.get("OUTPUT_DIR", "./")
     )
-    
+
     # Run the complete research workflow
     output_file = asyncio.run(grimaud_agent.research_and_save())
     print(f"Research completed and saved to: {output_file}")
