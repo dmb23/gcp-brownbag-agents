@@ -1,5 +1,3 @@
-import asyncio
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -24,9 +22,9 @@ class GrimaudAgent:
     A class that handles all aspects of the Grimaud research agent.
     This includes creation, running tasks, and handling results.
     """
-    
+
     def __init__(
-        self, 
+        self,
         model: Model | str,
         request_limit: int = 10,
         retries: int = 4,
@@ -34,7 +32,7 @@ class GrimaudAgent:
     ):
         """
         Initialize the Grimaud agent with the specified model and settings.
-        
+
         Args:
             model: The LLM model to use
             request_limit: Maximum number of API requests allowed
@@ -45,7 +43,7 @@ class GrimaudAgent:
         self.request_limit = request_limit
         self.output_dir = output_dir
         self.agent = self._create_agent(retries)
-        
+
     def _create_agent(self, retries: int) -> Agent[types.RunDeps, types.ResearchResult]:
         """Create and configure the agent with all necessary tools and settings."""
         # Create tool instances
@@ -75,72 +73,72 @@ class GrimaudAgent:
                 return f"Please search the web for more information on the topic {ctx.deps.search_goal} to prepare the presentation."
 
         return grimaud
-    
+
     async def run_research(self, search_goal: str = "HN") -> types.ResearchResult:
         """
         Run the research task with the specified search goal.
-        
+
         Args:
             search_goal: The research goal, default is "HN" for Hacker News
-            
+
         Returns:
             The research result
         """
         usage_limits = UsageLimits(request_limit=self.request_limit)
-        
+
         async with httpx.AsyncClient() as client:
             research_deps = types.RunDeps(client=client, search_goal=search_goal)
             run_result = await self.agent.run(
-                prompts.GRIMAUD_TASK, 
-                deps=research_deps, 
-                usage_limits=usage_limits
+                prompts.GRIMAUD_TASK, deps=research_deps, usage_limits=usage_limits
             )
 
         return run_result.output
-    
+
     def convert_to_markdown(self, research_result: types.ResearchResult) -> str:
         """Convert the research result to markdown format."""
         result_md = research_result.full_text + "\n\n"
-        
+
         for img in research_result.images:
             result_md += f"![{img.description}]({img.url})\n"
-            
+
         result_md += "\n## References:\n\n"
-        
+
         for ref in research_result.references:
             result_md += f"- [{ref.description}]({ref.url})\n"
-            
+
         return result_md
-    
-    def save_markdown(self, markdown_content: str, filename: Optional[str] = None) -> Path:
+
+    def save_markdown(
+        self, markdown_content: str, filename: Optional[str] = None
+    ) -> Path:
         """
         Save the markdown content to a file.
-        
+
         Args:
             markdown_content: The markdown content to save
             filename: Optional custom filename, defaults to timestamp-based name
-            
+
         Returns:
             Path to the saved file
         """
         if filename is None:
             filename = f"markdown_report_{datetime.now()}.md"
-            
+
         outdir = Path(self.output_dir)
         outdir.mkdir(exist_ok=True, parents=True)
-        
+
         outfile = outdir / filename
         outfile.write_text(markdown_content)
-        
+
         return outfile
-    
+
     async def research_and_save(self, search_goal: str = "HN") -> Path:
         """
         Run the complete research workflow: research, convert to markdown, and save.
-        
+
         Args:
             search_goal: The research goal
-            
+
         Returns:
             Path to the saved markdown file
         """
@@ -155,10 +153,10 @@ def wake_up_grimaud(
     """
     Legacy function to maintain backward compatibility.
     Creates a basic Grimaud agent without the additional functionality.
-    
+
     Args:
         model: The LLM model to use
-        
+
     Returns:
         A configured Grimaud agent
     """
