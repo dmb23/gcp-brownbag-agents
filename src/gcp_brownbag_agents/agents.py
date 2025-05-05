@@ -145,19 +145,3 @@ class GrimaudAgent:
         research_result = await self.run_research(search_goal)
         markdown_content = self.convert_to_markdown(research_result)
         return self.save_markdown(markdown_content)
-
-
-def wake_up_grimaud(
-    model: Model | str,
-) -> Agent[types.RunDeps, types.ResearchResult]:
-    """
-    Legacy function to maintain backward compatibility.
-    Creates a basic Grimaud agent without the additional functionality.
-
-    Args:
-        model: The LLM model to use
-
-    Returns:
-        A configured Grimaud agent
-    """
-    return GrimaudAgent(model)._create_agent(retries=4)
