@@ -47,7 +47,7 @@ For each topic, consider:
 4. Potential downsides of the approach
 5. Current state of the project
 
-Select the best topic and explain your reasoning.
+Select the best topic and mention all topics you considered.
 """
 
 RESEARCHER_SYSTEM = GRIMAUD_SYSTEM  # Reusing the original system prompt
@@ -59,7 +59,7 @@ Title: {topic}
 Description: {description}
 original source: {source_url}
 
-Conduct further research on this topic, going first over the provided URL and then adding linked sources or conducting further web searches.
+Conduct further research on this topic, going first over the provided URL and then visiting linked sources or conducting further web searches if you deem it necessary.
 
 Provide detailed information including:
 1. Technical details and how it works
@@ -68,7 +68,7 @@ Provide detailed information including:
 4. Key insights for data professionals
 5. Code examples if applicable
 
-Include relevant images and reference links.
+Include relevant images from the visited pages. Also include References to all URLs you visited or to relevant URLs that are directly mentioned in those pages.
 """
 
 REPORT_GENERATOR_SYSTEM = """
@@ -96,5 +96,5 @@ Use proper markdown formatting including headings, lists, code blocks,
 and emphasis where appropriate. Include properly formatted images when provided where applicable.
 
 The research results are presented in JSON:
-{research_results}
+{research_result}
 """

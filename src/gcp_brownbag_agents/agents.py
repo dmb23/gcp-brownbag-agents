@@ -18,13 +18,20 @@ from gcp_brownbag_agents.tools import (
 )
 
 
-class TopicSelectionResult(BaseModel):
-    """Result of the topic selection process."""
+class ConsideredTopic(BaseModel):
+    """A possible topic, evaluated on its relevance for data professionals."""
 
     topic: str
     description: str
-    relevance_score: float  # 0-1 score of relevance to data engineering/ML
     source_url: str  # Where the topic was found
+    relevance_score: float  # 0-1 score of relevance to data engineering/ML
+
+
+class TopicSelectionResult(BaseModel):
+    """Result of the topic selection process."""
+
+    selected_topic: ConsideredTopic
+    considered_topics: List[str]
 
 
 class EnhancedResearchResult(BaseModel):
@@ -157,13 +164,13 @@ class GrimaudAgent:
 
         # Format the research task with the topic and plan details
         research_task = prompts.RESEARCHER_TASK_TEMPLATE.format(
-            topic=topic.topic,
-            description=topic.description,
-            source_url=topic.source_url,
+            topic=topic.selected_topic.topic,
+            description=topic.selected_topic.description,
+            source_url=topic.selected_topic.source_url,
         )
 
         async with httpx.AsyncClient() as client:
-            research_deps = types.RunDeps(client=client, search_goal=topic.topic)
+            research_deps = types.RunDeps(client=client, search_goal="web")
             run_result = await self.researcher.run(
                 research_task, deps=research_deps, usage_limits=usage_limits
             )
@@ -225,8 +232,10 @@ class GrimaudAgent:
         now = datetime.now()
         # Step 1: Select a topic
         topic = await self.select_topic()
-        print(f"Selected topic: {topic.topic} (Relevance: {topic.relevance_score})")
-        print(f"Description: {topic.description}")
+        print(
+            f"Selected topic: {topic.selected_topic.topic} (Relevance: {topic.selected_topic.relevance_score})"
+        )
+        print(f"Description: {topic.selected_topic.description}")
         self.save_output(topic.model_dump_json(), f"{now}_topic_selection.json")
 
         # Step 2: Research the topic

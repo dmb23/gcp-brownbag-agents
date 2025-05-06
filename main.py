@@ -10,7 +10,7 @@ from gcp_brownbag_agents.agents import GrimaudAgent
 if __name__ == "__main__":
     load_dotenv()
 
-    logfire.configure()
+    logfire.configure(scrubbing=False)
     logfire.instrument_httpx(capture_all=True)
 
     # Claude 3.5 - current setup was developed here, quickly picks a topic and then writes a happy report
@@ -27,9 +27,9 @@ if __name__ == "__main__":
 
     # Create the Grimaud agent with our model and settings
     grimaud_agent = GrimaudAgent(
-        model=model, 
+        model=model,
         request_limit=30,  # Increased limit for the three-step process
-        output_dir=os.environ.get("OUTPUT_DIR", "./")
+        output_dir=os.environ.get("OUTPUT_DIR", "./"),
     )
 
     # Run the complete three-step workflow
