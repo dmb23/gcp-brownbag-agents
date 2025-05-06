@@ -1,10 +1,10 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import List, Optional
 
 import httpx
 from pydantic import BaseModel
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent
 from pydantic_ai.models import Model
 from pydantic_ai.usage import UsageLimits
 
@@ -20,29 +20,26 @@ from gcp_brownbag_agents.tools import (
 
 class TopicSelectionResult(BaseModel):
     """Result of the topic selection process."""
+
     topic: str
     description: str
     relevance_score: float  # 0-1 score of relevance to data engineering/ML
-    reasoning: str  # Why this topic was selected
     source_url: str  # Where the topic was found
 
 
-class ResearchPlan(BaseModel):
-    """Plan for researching a topic."""
-    topic: str
-    key_questions: List[str]
-    search_queries: List[str]
-    expected_insights: List[str]
-
-
-class EnhancedResearchResult(types.ResearchResult):
+class EnhancedResearchResult(BaseModel):
     """Enhanced research result with additional information."""
+
     topic: str
+    original_description: str
+    original_source: str
+    technical_details: List[str]
+    business_impact: str
+    drawbacks: List[str]
     key_insights: List[str]
-    technical_details: Dict[str, Any] = {}
-    business_impact: str = ""
-    future_trends: List[str] = []
-    code_examples: List[str] = []
+    code_examples: List[str]
+    references: list[types.ReferenceLink]
+    images: list[types.ImageLink]
 
 
 class GrimaudAgent:
@@ -71,12 +68,12 @@ class GrimaudAgent:
         self.request_limit = request_limit
         self.output_dir = output_dir
         self.retries = retries
-        
+
         # Create tool instances that will be shared across agents
         self.hn_tool = HackerNewsTool(prepare_func=select_hn)
         self.ddg_tool = DuckDuckGoSearchTool(prepare_func=select_search)
         self.webpage_tool = WebpageTool()
-        
+
         # Initialize the specialized agents
         self.topic_selector = self._create_topic_selector()
         self.researcher = self._create_researcher()
@@ -118,7 +115,7 @@ class GrimaudAgent:
             self.model,
             tools=[],  # No tools needed for report generation
             output_type=str,  # Output is markdown text
-            deps_type=dict,  # Will pass the research result as a dict
+            deps_type=types.RunDeps,  # Will pass the research result as a dict
             retries=self.retries,
             system_prompt=prompts.REPORT_GENERATOR_SYSTEM,
             instrument=True,
@@ -128,105 +125,73 @@ class GrimaudAgent:
     async def select_topic(self) -> TopicSelectionResult:
         """
         Step 1: Select an interesting topic from trending sources.
-        
+
         Returns:
             A selected topic with relevance score and reasoning
         """
         usage_limits = UsageLimits(request_limit=self.request_limit // 3)
-        
+
         async with httpx.AsyncClient() as client:
             research_deps = types.RunDeps(client=client, search_goal="HN")
             run_result = await self.topic_selector.run(
-                prompts.TOPIC_SELECTOR_TASK, 
-                deps=research_deps, 
-                usage_limits=usage_limits
+                prompts.TOPIC_SELECTOR_TASK,
+                deps=research_deps,
+                usage_limits=usage_limits,
             )
-        
+
         return run_result.output
 
-    async def research_topic(self, topic: TopicSelectionResult) -> EnhancedResearchResult:
+    async def research_topic(
+        self, topic: TopicSelectionResult
+    ) -> EnhancedResearchResult:
         """
         Step 2: Conduct in-depth research on the selected topic.
-        
+
         Args:
             topic: The selected topic to research
-            
+
         Returns:
             Comprehensive research results
         """
         usage_limits = UsageLimits(request_limit=self.request_limit // 3 * 2)
-        
-        # Create a research plan based on the topic
-        research_plan = self._create_research_plan(topic)
-        
+
         # Format the research task with the topic and plan details
         research_task = prompts.RESEARCHER_TASK_TEMPLATE.format(
             topic=topic.topic,
             description=topic.description,
-            key_questions=", ".join(research_plan.key_questions),
-            search_queries=", ".join(research_plan.search_queries)
+            source_url=topic.source_url,
         )
-        
+
         async with httpx.AsyncClient() as client:
             research_deps = types.RunDeps(client=client, search_goal=topic.topic)
             run_result = await self.researcher.run(
-                research_task, 
-                deps=research_deps, 
-                usage_limits=usage_limits
+                research_task, deps=research_deps, usage_limits=usage_limits
             )
-        
-        return run_result.output
 
-    def _create_research_plan(self, topic: TopicSelectionResult) -> ResearchPlan:
-        """Create a research plan based on the selected topic."""
-        # This could be made into an agent call as well, but for simplicity
-        # we'll just create a basic plan programmatically
-        return ResearchPlan(
-            topic=topic.topic,
-            key_questions=[
-                f"What is {topic.topic} and how does it work?",
-                f"What are the technical components of {topic.topic}?",
-                f"How is {topic.topic} being used in industry?",
-                f"What are the future trends for {topic.topic}?",
-            ],
-            search_queries=[
-                f"{topic.topic} data engineering",
-                f"{topic.topic} technical details",
-                f"{topic.topic} use cases",
-                f"{topic.topic} tutorial",
-            ],
-            expected_insights=[
-                "Technical architecture",
-                "Implementation challenges",
-                "Business value",
-                "Future developments",
-            ]
-        )
+        return run_result.output
 
     async def generate_report(self, research_result: EnhancedResearchResult) -> str:
         """
         Step 3: Generate a polished markdown report from research results.
-        
+
         Args:
             research_result: The comprehensive research results
-            
+
         Returns:
             Formatted markdown report
         """
         usage_limits = UsageLimits(request_limit=self.request_limit // 3)
-        
-        # Convert the research result to a dict for the agent
-        research_dict = research_result.dict()
-        
+
         run_result = await self.report_generator.run(
-            prompts.REPORT_GENERATOR_TASK, 
-            deps=research_dict, 
-            usage_limits=usage_limits
+            prompts.REPORT_GENERATOR_TASK_TEMPLATE.format(
+                research_result=research_result.model_dump_json()
+            ),
+            usage_limits=usage_limits,
         )
-        
+
         return run_result.output
 
-    def save_markdown(
+    def save_output(
         self, markdown_content: str, filename: Optional[str] = None
     ) -> Path:
         """
@@ -253,22 +218,29 @@ class GrimaudAgent:
     async def run_full_workflow(self) -> Path:
         """
         Run the complete three-step workflow: topic selection, research, and report generation.
-        
+
         Returns:
             Path to the saved markdown file
         """
+        now = datetime.now()
         # Step 1: Select a topic
         topic = await self.select_topic()
         print(f"Selected topic: {topic.topic} (Relevance: {topic.relevance_score})")
-        print(f"Reasoning: {topic.reasoning}")
-        
+        print(f"Description: {topic.description}")
+        self.save_output(topic.model_dump_json(), f"{now}_topic_selection.json")
+
         # Step 2: Research the topic
         research_result = await self.research_topic(topic)
-        print(f"Research completed with {len(research_result.key_insights)} key insights")
-        
+        print(
+            f"Research completed with {len(research_result.key_insights)} key insights"
+        )
+        self.save_output(
+            research_result.model_dump_json(), f"{now}_research_result.json"
+        )
+
         # Step 3: Generate a report
         markdown_report = await self.generate_report(research_result)
         print(f"Report generated with {len(markdown_report)} characters")
-        
+
         # Save the report
-        return self.save_markdown(markdown_report)
+        return self.save_output(markdown_report, f"{now}_markdown_report.md")
