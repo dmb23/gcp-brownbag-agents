@@ -13,6 +13,7 @@ if __name__ == "__main__":
 
     logfire.configure(scrubbing=False)
     logfire.instrument_httpx(capture_all=True)
+    logger.add(**logfire.loguru_handler())
 
     # Claude 3.5 - original setup was developed here, quickly picks a topic and then writes a happy report
     # model_name = "anthropic:claude-3-5-sonnet-latest"

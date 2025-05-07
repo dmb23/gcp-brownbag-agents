@@ -8,6 +8,7 @@ import anyio
 import anyio.to_thread
 import httpx
 from duckduckgo_search import DDGS
+from loguru import logger
 from markdownify import markdownify
 from pydantic import TypeAdapter, ValidationError
 from pydantic_ai import RunContext
@@ -77,8 +78,17 @@ class HackerNewsTool(BaseTool[types.RunDeps]):
         num_entries = min(num_entries, 500)
         url = f"https://hacker-news.firebaseio.com/v0/{story_type}stories.json"
 
-        response = await ctx.deps.client.get(url)
-        response.raise_for_status()
+        try:
+            response = await ctx.deps.client.get(url)
+            response.raise_for_status()
+        except httpx.RequestError as exc:
+            logger.error(f"An error occurred while requesting {exc.request.url!r}.")
+            return []
+        except httpx.HTTPStatusError as exc:
+            logger.error(
+                f"Error response {exc.response.status_code} while requesting {exc.request.url!r}."
+            )
+            return []
 
         stories_ids = response.json()[:num_entries]
 
@@ -97,7 +107,20 @@ class HackerNewsTool(BaseTool[types.RunDeps]):
     async def _get_story(
         self, client: httpx.AsyncClient, id: str
     ) -> types.Story | None:
-        r = await client.get(f"https://hacker-news.firebaseio.com/v0/item/{id}.json")
+        try:
+            r = await client.get(
+                f"https://hacker-news.firebaseio.com/v0/item/{id}.json"
+            )
+            r.raise_for_status()
+        except httpx.RequestError as exc:
+            logger.error(f"An error occurred while requesting {exc.request.url!r}.")
+            return None
+        except httpx.HTTPStatusError as exc:
+            logger.error(
+                f"Error response {exc.response.status_code} while requesting {exc.request.url!r}."
+            )
+            return None
+
         try:
             return types.Story.model_validate_json(r.content)
         except ValidationError:
@@ -148,7 +171,9 @@ class DuckDuckGoSearchTool(BaseTool):
 
 
 class WebpageTool(BaseTool[types.RunDeps]):
-    """Tool for visiting webpages and retrieving their content."""
+    """Tool for visiting webpages and retrieving their content.
+
+    This tool will only work on HTML pages, and is incapable of parsing PDFs."""
 
     def __init__(self, prepare_func=None):
         """Initialize the webpage tool."""
@@ -164,6 +189,9 @@ class WebpageTool(BaseTool[types.RunDeps]):
         Returns:
             The content of the webpage converted to Markdown, or an error message if the request fails.
         """
+        if url.lower().endswith(".pdf"):
+            return "WebpageTool cannot be used to read PDF files!"
+
         try:
             # Send a GET request to the URL
             response = await ctx.deps.client.get(url)
@@ -177,8 +205,10 @@ class WebpageTool(BaseTool[types.RunDeps]):
 
             return markdown_content
 
-        except httpx.HTTPError as e:
-            return f"Error fetching the webpage: {str(e)}"
+        except httpx.RequestError as exc:
+            return f"An error occurred while requesting {exc.request.url!r}."
+        except httpx.HTTPStatusError as exc:
+            return f"Error response {exc.response.status_code} while requesting {exc.request.url!r}."
         except Exception as e:
             return f"An unexpected error occurred: {str(e)}"
 
