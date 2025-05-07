@@ -13,11 +13,13 @@ if __name__ == "__main__":
     logfire.configure(scrubbing=False)
     logfire.instrument_httpx(capture_all=True)
 
-    # Claude 3.5 - current setup was developed here, quickly picks a topic and then writes a happy report
+    # Claude 3.5 - original setup was developed here, quickly picks a topic and then writes a happy report
     # model_name = "anthropic:claude-3-5-sonnet-latest"
 
-    # Gemini 2.5 Flash - setup worked, but there were inconsistencies in the reports
+    # Gemini 2.5 Flash - original setup worked, but there were inconsistencies in the reports
     # model = GeminiModel("gemini-2.5-flash-preview-04-17", provider="google-vertex")
+
+    # Gemini 2.5 Pro - three-step setup was developed on this model
     model = GeminiModel("gemini-2.5-pro-preview-03-25", provider="google-vertex")
 
     # Gemini 2.0 Flash - got lost in an eternal research spree...
@@ -28,7 +30,7 @@ if __name__ == "__main__":
     # Create the Grimaud agent with our model and settings
     grimaud_agent = GrimaudAgent(
         model=model,
-        request_limit=30,  # Increased limit for the three-step process
+        request_limit=10,
         output_dir=os.environ.get("OUTPUT_DIR", "./"),
     )
 

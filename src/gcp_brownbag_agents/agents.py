@@ -13,8 +13,6 @@ from gcp_brownbag_agents.tools import (
     DuckDuckGoSearchTool,
     HackerNewsTool,
     WebpageTool,
-    select_hn,
-    select_search,
 )
 
 
@@ -59,7 +57,7 @@ class GrimaudAgent:
         self,
         model: Model | str,
         request_limit: int = 10,
-        retries: int = 4,
+        retries: int = 2,
         output_dir: str = "./",
     ):
         """
@@ -75,10 +73,13 @@ class GrimaudAgent:
         self.request_limit = request_limit
         self.output_dir = output_dir
         self.retries = retries
+        self._client_kwargs = {}
+        self._client = httpx.AsyncClient(**self._client_kwargs)
+        self._usage = UsageLimits(request_limit=self.request_limit)
 
         # Create tool instances that will be shared across agents
-        self.hn_tool = HackerNewsTool(prepare_func=select_hn)
-        self.ddg_tool = DuckDuckGoSearchTool(prepare_func=select_search)
+        self.hn_tool = HackerNewsTool()
+        self.ddg_tool = DuckDuckGoSearchTool()
         self.webpage_tool = WebpageTool()
 
         # Initialize the specialized agents
@@ -86,11 +87,19 @@ class GrimaudAgent:
         self.researcher = self._create_researcher()
         self.report_generator = self._create_report_generator()
 
-    def _create_topic_selector(self) -> Agent:
+    def _start_client(self):
+        if not hasattr(self._client, "is_closed") or self._client.is_closed:
+            self._client = httpx.AsyncClient(**self._client_kwargs)
+
+    async def _close_client(self):
+        if not self._client.is_closed:
+            await self._client.aclose()
+
+    def _create_topic_selector(self) -> Agent[types.RunDeps, TopicSelectionResult]:
         """Create an agent specialized in selecting interesting topics."""
         topic_selector = Agent(
             self.model,
-            tools=[self.hn_tool.get_tool(), self.ddg_tool.get_tool()],
+            tools=[self.hn_tool.get_tool()],
             output_type=TopicSelectionResult,
             deps_type=types.RunDeps,
             retries=self.retries,
@@ -99,13 +108,12 @@ class GrimaudAgent:
         )
         return topic_selector
 
-    def _create_researcher(self) -> Agent:
+    def _create_researcher(self) -> Agent[types.RunDeps, EnhancedResearchResult]:
         """Create an agent specialized in in-depth research."""
         researcher = Agent(
             self.model,
             tools=[
                 self.webpage_tool.get_tool(),
-                self.hn_tool.get_tool(),
                 self.ddg_tool.get_tool(),
             ],
             output_type=EnhancedResearchResult,
@@ -120,9 +128,8 @@ class GrimaudAgent:
         """Create an agent specialized in creating polished reports."""
         report_generator = Agent(
             self.model,
-            tools=[],  # No tools needed for report generation
-            output_type=str,  # Output is markdown text
-            deps_type=types.RunDeps,  # Will pass the research result as a dict
+            tools=[],
+            output_type=str,
             retries=self.retries,
             system_prompt=prompts.REPORT_GENERATOR_SYSTEM,
             instrument=True,
@@ -138,13 +145,12 @@ class GrimaudAgent:
         """
         usage_limits = UsageLimits(request_limit=self.request_limit // 3)
 
-        async with httpx.AsyncClient() as client:
-            research_deps = types.RunDeps(client=client, search_goal="HN")
-            run_result = await self.topic_selector.run(
-                prompts.TOPIC_SELECTOR_TASK,
-                deps=research_deps,
-                usage_limits=usage_limits,
-            )
+        research_deps = types.RunDeps(client=self._client)
+        run_result = await self.topic_selector.run(
+            prompts.TOPIC_SELECTOR_TASK,
+            deps=research_deps,
+            usage_limits=usage_limits,
+        )
 
         return run_result.output
 
@@ -160,8 +166,6 @@ class GrimaudAgent:
         Returns:
             Comprehensive research results
         """
-        usage_limits = UsageLimits(request_limit=self.request_limit // 3 * 2)
-
         # Format the research task with the topic and plan details
         research_task = prompts.RESEARCHER_TASK_TEMPLATE.format(
             topic=topic.selected_topic.topic,
@@ -169,11 +173,10 @@ class GrimaudAgent:
             source_url=topic.selected_topic.source_url,
         )
 
-        async with httpx.AsyncClient() as client:
-            research_deps = types.RunDeps(client=client, search_goal="web")
-            run_result = await self.researcher.run(
-                research_task, deps=research_deps, usage_limits=usage_limits
-            )
+        research_deps = types.RunDeps(client=self._client)
+        run_result = await self.researcher.run(
+            research_task, deps=research_deps, usage_limits=self._usage
+        )
 
         return run_result.output
 
@@ -187,26 +190,22 @@ class GrimaudAgent:
         Returns:
             Formatted markdown report
         """
-        usage_limits = UsageLimits(request_limit=self.request_limit // 3)
-
         run_result = await self.report_generator.run(
             prompts.REPORT_GENERATOR_TASK_TEMPLATE.format(
                 research_result=research_result.model_dump_json()
             ),
-            usage_limits=usage_limits,
+            usage_limits=self._usage,
         )
 
         return run_result.output
 
-    def save_output(
-        self, markdown_content: str, filename: Optional[str] = None
-    ) -> Path:
+    def save_output(self, file_contents: str, filename: Optional[str] = None) -> Path:
         """
-        Save the markdown content to a file.
+        Save (intermediate) output to a file.
 
         Args:
-            markdown_content: The markdown content to save
-            filename: Optional custom filename, defaults to timestamp-based name
+            file_contents: The string content to save
+            filename: Optional custom filename, defaults to timestamp-based name for markdown report
 
         Returns:
             Path to the saved file
@@ -218,7 +217,7 @@ class GrimaudAgent:
         outdir.mkdir(exist_ok=True, parents=True)
 
         outfile = outdir / filename
-        outfile.write_text(markdown_content)
+        outfile.write_text(file_contents)
 
         return outfile
 
@@ -229,14 +228,20 @@ class GrimaudAgent:
         Returns:
             Path to the saved markdown file
         """
+        self._start_client()
         now = datetime.now()
         # Step 1: Select a topic
         topic = await self.select_topic()
+        topic_name = topic.selected_topic.topic
+        # TODO: change print statements to logging, ideally loguru + logfire instrumentation
         print(
             f"Selected topic: {topic.selected_topic.topic} (Relevance: {topic.selected_topic.relevance_score})"
         )
         print(f"Description: {topic.selected_topic.description}")
-        self.save_output(topic.model_dump_json(), f"{now}_topic_selection.json")
+        self.save_output(
+            topic.model_dump_json(),
+            f"topic_selection_{topic_name[:10].replace(' ', '_')}_{now}.json",
+        )
 
         # Step 2: Research the topic
         research_result = await self.research_topic(topic)
@@ -244,12 +249,19 @@ class GrimaudAgent:
             f"Research completed with {len(research_result.key_insights)} key insights"
         )
         self.save_output(
-            research_result.model_dump_json(), f"{now}_research_result.json"
+            research_result.model_dump_json(),
+            f"research_result_{topic_name[:10].replace(' ', '_')}_{now}.json",
         )
 
         # Step 3: Generate a report
         markdown_report = await self.generate_report(research_result)
         print(f"Report generated with {len(markdown_report)} characters")
 
-        # Save the report
-        return self.save_output(markdown_report, f"{now}_markdown_report.md")
+        # Save the final report
+        report_file = self.save_output(
+            markdown_report,
+            f"markdown_report_{topic_name[:10].replace(' ', '_')}_{now}.md",
+        )
+
+        await self._close_client()
+        return report_file
