@@ -3,6 +3,7 @@ import os
 
 import logfire
 from dotenv import load_dotenv
+from loguru import logger
 from pydantic_ai.models.gemini import GeminiModel
 
 from gcp_brownbag_agents.agents import GrimaudAgent
