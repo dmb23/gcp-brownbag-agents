@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import httpx
+from loguru import logger
 from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.models import Model
@@ -233,11 +234,10 @@ class GrimaudAgent:
         # Step 1: Select a topic
         topic = await self.select_topic()
         topic_name = topic.selected_topic.topic
-        # TODO: change print statements to logging, ideally loguru + logfire instrumentation
-        print(
+        logger.info(
             f"Selected topic: {topic.selected_topic.topic} (Relevance: {topic.selected_topic.relevance_score})"
         )
-        print(f"Description: {topic.selected_topic.description}")
+        logger.info(f"Description: {topic.selected_topic.description}")
         self.save_output(
             topic.model_dump_json(),
             f"topic_selection_{topic_name[:10].replace(' ', '_')}_{now}.json",
@@ -245,7 +245,7 @@ class GrimaudAgent:
 
         # Step 2: Research the topic
         research_result = await self.research_topic(topic)
-        print(
+        logger.info(
             f"Research completed with {len(research_result.key_insights)} key insights"
         )
         self.save_output(
@@ -255,7 +255,7 @@ class GrimaudAgent:
 
         # Step 3: Generate a report
         markdown_report = await self.generate_report(research_result)
-        print(f"Report generated with {len(markdown_report)} characters")
+        logger.info(f"Report generated with {len(markdown_report)} characters")
 
         # Save the final report
         report_file = self.save_output(

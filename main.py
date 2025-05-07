@@ -36,4 +36,4 @@ if __name__ == "__main__":
 
     # Run the complete three-step workflow
     output_file = asyncio.run(grimaud_agent.run_full_workflow())
-    print(f"Research workflow completed and saved to: {output_file}")
+    logger.success(f"Research workflow completed and saved to: {output_file}")
