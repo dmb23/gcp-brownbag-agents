@@ -9,6 +9,7 @@ dependencies = [
     "duckduckgo-search>=8.0.1",
     "httpx>=0.28.1",
     "logfire[httpx]>=3.14.1",
+    "loguru>=0.7.3",
     "markdownify>=1.1.0",
     "pydantic>=2.11.3",
     "pydantic-ai>=0.1.4",

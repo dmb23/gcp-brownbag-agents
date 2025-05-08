@@ -11,5 +11,7 @@ wheels/
 
 # files for local testing
 .env
-markdown_report*.md
+*markdown_report*.md
+*research_result*.json
+*topic_selection*.json
 .aider*

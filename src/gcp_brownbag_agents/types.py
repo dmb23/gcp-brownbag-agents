@@ -8,7 +8,6 @@ from pydantic import BaseModel
 @dataclass
 class RunDeps:
     client: httpx.AsyncClient
-    search_goal: str
 
 
 class ReferenceLink(BaseModel):
